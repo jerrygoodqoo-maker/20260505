@@ -1,6 +1,7 @@
 let capture;
 let facemesh;
 let predictions = [];
+let stars = [];
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
@@ -10,6 +11,11 @@ function setup() {
 
   // ml5.js v1.x API: faceMesh（注意大寫 M）
   facemesh = ml5.faceMesh({ maxFaces: 1 }, modelReady);
+
+  // 初始化星星位置
+  for (let i = 0; i < 200; i++) {
+    stars.push({ x: random(width), y: random(height), size: random(1, 3) });
+  }
 }
 
 function modelReady() {
@@ -22,10 +28,16 @@ function gotFaces(results) {
 }
 
 function draw() {
-  background('#e7c6ff');
+  // 太空背景：深黑色與星光
+  background(10, 10, 25);
+  noStroke();
+  fill(255);
+  for (let star of stars) {
+    ellipse(star.x, star.y, star.size);
+  }
 
   // 在影像上方顯示文字（寫在 push/pop 之外，避免文字被左右顛倒）
-  fill(0); // 設定文字顏色為黑色
+  fill(255); // 改為白色在太空背景下較清晰
   textSize(32); // 設定文字大小
   textAlign(CENTER, CENTER); // 設定文字對齊方式為置中
   text('教科414730399', width / 2, height * 0.15); // 將文字繪製在畫布上方 (約 15% 高度處)
@@ -33,43 +45,81 @@ function draw() {
   push(); // 儲存目前的畫布座標狀態
   translate(width, 0); // 將座標原點移至畫布右側
   scale(-1, 1); // 水平翻轉影像（左右顛倒），垂直不變
-  // 在畫布正中間繪製影像，寬與高皆設定為畫布寬高的 50%
-  image(capture, width / 2, height / 2, width * 0.5, height * 0.5);
 
   // 繪製 facemesh 特徵點
   if (predictions.length > 0 && capture.width > 0) {
     let keypoints = predictions[0].keypoints;
     
-    // 定義兩組嘴唇特徵點編號
-    let lipContours = [
+    // 1. 臉部最外圍輪廓編號 (Face Silhouette)
+    let faceSilhouette = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];
+    
+    // 2. 黑眼圈 (247與467所在的外圈)
+    let darkCircles = [
+      [130, 247, 30, 29, 28, 27, 26, 25, 24, 23, 22, 110, 243, 112, 113, 124, 226], // 右眼外
+      [359, 467, 260, 259, 258, 257, 256, 255, 254, 253, 252, 463, 341, 446, 353, 466]  // 左眼外
+    ];
+    
+    // 3. 一般細線輪廓 (嘴唇與內眼圈)
+    let thinContours = [
       [409, 270, 269, 267, 0, 37, 39, 40, 185, 61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291],
-      [76, 77, 90, 180, 85, 16, 315, 404, 320, 307, 306, 408, 304, 303, 302, 11, 72, 73, 74, 184]
+      [76, 77, 90, 180, 85, 16, 315, 404, 320, 307, 306, 408, 304, 303, 302, 11, 72, 73, 74, 184],
+      [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7], // 右眼內
+      [263, 466, 388, 387, 386, 385, 384, 398, 362, 382, 381, 380, 374, 373, 390, 249]  // 左眼內
     ];
 
-    stroke(255, 0, 0); // 設定線條為紅色
-    strokeWeight(1); // 設定線條粗細為 1
-
-    // 遍歷兩組輪廓進行繪製
-    for (let indices of lipContours) {
-      for (let i = 0; i < indices.length; i++) {
-        let pt1 = keypoints[indices[i]];
-        // 連接下一個點，若為最後一個點則連回開頭形成封閉曲線
-        let pt2 = keypoints[indices[(i + 1) % indices.length]]; 
-
-        let x1 = pt1.x;
-        let y1 = pt1.y;
-        let x2 = pt2.x;
-        let y2 = pt2.y;
-
-        // 將座標映射到與影像相同比例與位置上 (50% 置中)
-        let mappedX1 = map(x1, 0, capture.width, width / 2 - width * 0.25, width / 2 + width * 0.25);
-        let mappedY1 = map(y1, 0, capture.height, height / 2 - height * 0.25, height / 2 + height * 0.25);
-        let mappedX2 = map(x2, 0, capture.width, width / 2 - width * 0.25, width / 2 + width * 0.25);
-        let mappedY2 = map(y2, 0, capture.height, height / 2 - height * 0.25, height / 2 + height * 0.25);
-        
-        line(mappedX1, mappedY1, mappedX2, mappedY2);
-      }
+    // --- 遮罩處理：讓影像只出現在臉部範圍內 ---
+    drawingContext.save();
+    beginShape();
+    for (let index of faceSilhouette) {
+      let pt = keypoints[index];
+      let px = map(pt.x, 0, capture.width, width / 2 - width * 0.25, width / 2 + width * 0.25);
+      let py = map(pt.y, 0, capture.height, height / 2 - height * 0.25, height / 2 + height * 0.25);
+      vertex(px, py);
     }
+    endShape(CLOSE);
+    drawingContext.clip(); // 開啟遮罩
+    image(capture, width / 2, height / 2, width * 0.5, height * 0.5);
+    drawingContext.restore(); // 關閉遮罩，恢復後續繪製
+
+    // --- 繪製線條 ---
+    
+    // A. 繪製黑眼圈 (深灰色, 粗細 15)
+    stroke(50); 
+    strokeWeight(15);
+    noFill();
+    for (let indices of darkCircles) {
+      drawContour(indices, keypoints);
+    }
+
+    // B. 繪製嘴唇與內眼圈 (紅色, 粗細 1)
+    stroke(255, 0, 0);
+    strokeWeight(1);
+    for (let indices of thinContours) {
+      drawContour(indices, keypoints);
+    }
+
+    // C. 繪製臉部最外圈輪廓 (螢光藍, 粗細 2)
+    stroke(0, 255, 255); 
+    strokeWeight(2);
+    drawContour(faceSilhouette, keypoints);
+
+  } else {
+    // 如果沒偵測到臉，不繪製影像，只留下星空
   }
   pop(); // 恢復畫布座標狀態
+}
+
+// 輔助函式：根據點序號陣列繪製連接線
+function drawContour(indices, keypoints) {
+  for (let i = 0; i < indices.length; i++) {
+    let pt1 = keypoints[indices[i]];
+    let pt2 = keypoints[indices[(i + 1) % indices.length]]; 
+
+    let x1 = map(pt1.x, 0, capture.width, width / 2 - width * 0.25, width / 2 + width * 0.25);
+    let y1 = map(pt1.y, 0, capture.height, height / 2 - height * 0.25, height / 2 + height * 0.25);
+    let x2 = map(pt2.x, 0, capture.width, width / 2 - width * 0.25, width / 2 + width * 0.25);
+    let y2 = map(pt2.y, 0, capture.height, height / 2 - height * 0.25, height / 2 + height * 0.25);
+    
+    line(x1, y1, x2, y2);
+  }
 }
