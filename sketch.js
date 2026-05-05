@@ -28,7 +28,7 @@ function draw() {
   fill(0); // 設定文字顏色為黑色
   textSize(32); // 設定文字大小
   textAlign(CENTER, CENTER); // 設定文字對齊方式為置中
-  text('教科414730936', width / 2, height * 0.15); // 將文字繪製在畫布上方 (約 15% 高度處)
+  text('教科414730399', width / 2, height * 0.15); // 將文字繪製在畫布上方 (約 15% 高度處)
 
   push(); // 儲存目前的畫布座標狀態
   translate(width, 0); // 將座標原點移至畫布右側
