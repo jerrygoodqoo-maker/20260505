@@ -25,6 +25,12 @@ function draw() {
   // 設定背景顏色
   background('#e7c6ff');
 
+  // 在畫布上方顯示指定文字，並設定水平置中
+  fill(0); // 設定文字顏色為黑色
+  textSize(height * 0.05); // 根據畫布高度調整字體大小
+  textAlign(CENTER, CENTER);
+  text("教科414730399", width / 2, height * 0.1);
+
   push();
   // 將座標系統移至畫布中心
   translate(width / 2, height / 2);
